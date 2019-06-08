@@ -1,6 +1,7 @@
 '@import visibility-polygon-js/visibility_polygon_dev.js';
 const VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
-const geo = require('./geo')
+const inner = require('./geo')
+const outer = require('./geo2')
 
 const express = require('express')
 const path = require('path')
@@ -12,29 +13,28 @@ let center = [
 	47.2184894537
 ]
 
-let geodata = geo.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
 
+let innerData = inner.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
+let outerData = outer.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
+let geodata = innerData.concat(outerData)
 
 console.log('geodata')
-console.log(geodata[0])
+console.log(geodata)
 console.log('/geodata')
 
-var polygons = [];
-polygons.push([[-1,-1],[501,-1],[501,501],[-1,501]]);
-// polygons.push([[250,100],[300,200],[200,200]]);
-// polygons.push([[220,100],[220,300],[300,200]]);
+let allCorners = innerData.reduce(
+		(total, currentValue) => {
+			console.log('total = ', total)
+			currentValue.forEach(corner => { 
+				console.log('total2 = ', total)
+				total.push(corner) 
+			})
 
-
-polygons.push([[0,0],[0,100],[100,100], [100, 0]]);
-polygons.push([[50,50], [50,150], [150, 150], [150, 50]]);
-
-// for (var i = 0, l = polygons.length; i < l; i++) {
-// 	for (var j = 0, k = polygons[i].length; j < k; j++) {
-// 		polygons[i][j] = polygons[i][j] + 1.0
-// 	}	
-// }
-// console.log(polygons)
-
+			return total
+		}, 
+		[]
+	)
+console.log('allCorners\n', allCorners, '\n/allCorners')
 
 var segments = VisibilityPolygon.convertToSegments(geodata);
 segments = VisibilityPolygon.breakIntersections(segments);
@@ -81,18 +81,10 @@ function calcPolygonArea(vertices) {
   return Math.abs(total);
 }
 
-console.log(viewportVisibility);
+let allVertixes 
 
 const xyArray = viewportVisibility.map(a => ({x: a[0], y: a[1]}));
-
-console.log(calcPolygonArea(xyArray) );
-// app.get('/', function (req, res) {
-//   res.send('Hello World!');
-// });
-
-// app.listen(3000, function () {
-//   console.log('Example app listening on port 3000!');
-// });
+console.log('calcPolygonArea = ', calcPolygonArea(xyArray));
 
 var init = function() {
 	var canvas = document.getElementById("canvas");
@@ -109,8 +101,6 @@ var init = function() {
 	// console.log("arrayOfVec2")
 	// console.log(arrayOfVec2);
 
-	var one = Polygon([[0,0],[0,100],[100,100], [100, 0]]);
-	var two = Polygon([[50,50], [50,150], [150, 150], [150, 50]]);
 	let triangles = one.union(two);
 
 	var paths = triangles.map(triangle => {
@@ -119,7 +109,6 @@ var init = function() {
 		}, []);
 	});
   
-
 	clearScreen();
 
 	var combined =  createPoly(paths);
