@@ -7,7 +7,17 @@ const path = require('path')
 const app = express()
 const port = 3000
 
-console.log(geo);
+let center = [
+	38.9178872108,
+	47.2184894537
+]
+
+let geodata = geo.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
+
+
+console.log('geodata')
+console.log(geodata[0])
+console.log('/geodata')
 
 var polygons = [];
 polygons.push([[-1,-1],[501,-1],[501,501],[-1,501]]);
@@ -26,13 +36,34 @@ polygons.push([[50,50], [50,150], [150, 150], [150, 50]]);
 // console.log(polygons)
 
 
-var segments = VisibilityPolygon.convertToSegments(polygons);
+var segments = VisibilityPolygon.convertToSegments(geodata);
 segments = VisibilityPolygon.breakIntersections(segments);
-var position = [400, 400];
-if (VisibilityPolygon.inPolygon(position, polygons[0])) {
-  var visibility = VisibilityPolygon.compute(position, segments);
+var position = center;
+var visibility = VisibilityPolygon.compute(position, segments);
+var viewportVisibility = VisibilityPolygon.computeViewport(position, segments, [38.90911102294922, 38.926663398742676], [47.21408806123239, 47.22289084617913]);
+
+console.log('<viewportVisibility>', viewportVisibility)
+console.log('</viewportVisibility>')
+
+function geojsonfy(polygon) {
+	return {
+		"type": "FeatureCollection",
+		"features": [
+			{
+				"type": "Feature",
+				"properties": {},
+				"geometry": {
+					"type": "Polygon",
+					"coordinates": [ polygon ]
+				}
+			}
+		]
+	}
 }
-var viewportVisibility = VisibilityPolygon.computeViewport(position, segments, [50, 50], [450, 450]);
+
+console.log('<geojsonfy>', geojsonfy(viewportVisibility))
+console.log('</geojsonfy>')
+
 
 function calcPolygonArea(vertices) {
   var total = 0;
@@ -118,6 +149,10 @@ var init = function() {
 // Express
 app.get('/',function(req,res) {
 	res.sendFile('test.html', {root: path.join(__dirname, './')});
+});
+
+app.get('/result',function(req,res) {
+	res.send(geojsonfy(viewportVisibility));
 });
 
 app.listen(port, () => console.log(`App listening on port ${port}!`))
