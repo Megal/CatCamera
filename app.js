@@ -2,6 +2,7 @@
 const VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
 const inner = require('./geo')
 const outer = require('./geo2')
+let camPoly=[];
 
 const express = require('express')
 const path = require('path')
@@ -13,20 +14,19 @@ let center = [
 	47.2184894537
 ]
 
+const rPolyCam = 0.000466366;
+const edgeNumCam = 8;
+
+
 
 let innerData = inner.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
 let outerData = outer.data.features.map(function(feature) { return feature.geometry.coordinates[0] });
 let geodata = innerData.concat(outerData)
 
-console.log('geodata')
-console.log(geodata)
-console.log('/geodata')
-
 let allCorners = innerData.reduce(
 		(total, currentValue) => {
 			console.log('total = ', total)
 			currentValue.forEach(corner => { 
-				console.log('total2 = ', total)
 				total.push(corner) 
 			})
 
@@ -36,16 +36,22 @@ let allCorners = innerData.reduce(
 	)
 console.log('allCorners\n', allCorners, '\n/allCorners')
 
+camPoly = calcPolyCam(center[0],center[1],rPolyCam,edgeNumCam);
+
+geodataRestricted=geodata;
+geodataRestricted.push(camPoly);
+console.log('geodataRestricted = ', geodataRestricted);
+
 var segments = VisibilityPolygon.convertToSegments(geodata);
 segments = VisibilityPolygon.breakIntersections(segments);
 var position = center;
 var visibility = VisibilityPolygon.compute(position, segments);
 var viewportVisibility = VisibilityPolygon.computeViewport(position, segments, [38.90911102294922, 38.926663398742676], [47.21408806123239, 47.22289084617913]);
 
-console.log('<viewportVisibility>', viewportVisibility)
-console.log('</viewportVisibility>')
-
 function geojsonfy(polygon) {
+	var duplicatedFirst = polygon
+	duplicatedFirst.push(polygon[0])
+
 	return {
 		"type": "FeatureCollection",
 		"features": [
@@ -54,7 +60,7 @@ function geojsonfy(polygon) {
 				"properties": {},
 				"geometry": {
 					"type": "Polygon",
-					"coordinates": [ polygon ]
+					"coordinates": [ duplicatedFirst ]
 				}
 			}
 		]
@@ -63,6 +69,17 @@ function geojsonfy(polygon) {
 
 console.log('<geojsonfy>', geojsonfy(viewportVisibility))
 console.log('</geojsonfy>')
+
+
+function calcPolyCam(x, y, radius, numberOfSegments) {
+
+    var coordinates=[];
+
+    for (var i = 0; i <= numberOfSegments; i += 1) {
+        coordinates.push([x + radius * Math.cos(i * 2 * Math.PI / numberOfSegments), y + radius * Math.sin(i * 2 * Math.PI / numberOfSegments)]);
+    }
+    return coordinates;
+}
 
 
 function calcPolygonArea(vertices) {
