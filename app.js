@@ -27,7 +27,6 @@ let geodata = innerData.concat(outerData)
 
 let allCorners = innerData.reduce(
 		(total, currentValue) => {
-			//console.log('total = ', total)
 			currentValue.forEach(corner => { 
 				total.push(corner) 
 			})
@@ -40,31 +39,61 @@ let allCorners = innerData.reduce(
 
 function bestPlacement(cameraCount) {
 
-	let attempts = 25
+	let attempts = 10
 	let bestResult = []
 	let bestArea = -1
+
 	for (let attempt = 0; attempt < attempts; ++attempt) {
-		let placement = shuffle(allCorners).slice(0, cameraCount)
-		console.log('placement', placement)
+		let placement = shuffle(allCorners).slice(0, cameraCount);
+		// console.log('placement', placement);
 
 		let totalVisibility = []
 		placement.forEach(function(vertex) {
-			console.log('vertex', vertex)
-			let visibilityPolygon = makeVisibility(vertex)
+			// console.log('vertex', vertex);
+			let visibilityPolygon = makeVisibility(vertex);
+			// console.log('visibilityPolygon = ', visibilityPolygon);
 
-
-			let xyArray = visibilityPolygon.map(a => ({x: a[0], y: a[1]}));
-			let area = calcPolygonArea(xyArray)
-
-			console.log('area = ', area)
-			if (bestArea < area) {
-				bestArea = area
-				bestResult = placement
+			if (totalVisibility.length > 0) {
+				totalVisibility = mergePoly(totalVisibility, visibilityPolygon);
 			}
+			else {
+				totalVisibility = visibilityPolygon;
+			}
+			// console.log('totalVisibility = ', totalVisibility);
 		});
+
+		let area = calcTotalArea(totalVisibility)
+		// console.log('area = ', area);
+		if (bestArea < area) {
+			bestArea = area;
+			bestResult = placement;
+			console.log('new best area = ', bestArea);
+	}
+
 	}
 
 	return bestResult
+}
+
+function calcTotalArea(polygons) {
+	let vectorizedArea = 0
+
+	if(typeof polygons[0][0] === 'number'){ // single linear ring
+        polygons = [polygons];
+	}
+	
+    for(var i = 0, len = polygons.length; i < len; ++i){
+		let onePoly = polygons[i]
+		// console.log('one poly', onePoly)
+
+		let vectorized = onePoly.map(a => ({x: a[0], y: a[1]}));
+		// console.log('vectorized', vectorized)
+
+		vectorizedArea += calcPolygonArea(vectorized);
+		// console.log('vectorizedArea', vectorizedArea)
+	}
+	
+	return vectorizedArea
 }
 
 function makeVisibility(vertex) {
@@ -79,10 +108,8 @@ function makeVisibility(vertex) {
 	geodataRestricted.push(umbrella);
 
 	// convert to segments
-	console.log('geodataRestricted.length', geodataRestricted.length)
 	let segments = VisibilityPolygon.convertToSegments(geodataRestricted);
 	segments = VisibilityPolygon.breakIntersections(segments);
-	console.log('segments', segments)
 
 	// draw polygon and filter
 	let visibility = VisibilityPolygon.compute(vertex, segments);
@@ -154,8 +181,28 @@ function shuffle(a) {
     return a;
 }
 
-function mergePoly(one, two) {
-	return greiner.union(one,two)
+function mergePoly(source, simple) {
+	if (source.length == 0) {
+		return [simple]
+	}
+
+	let final = []
+	for (let i = 0, len = source.count; i < len; ++i) {
+		let one = source[i]
+		let merged = greiner.union(one,simple)
+		if (merged.length == 2) {
+			final.push(one)
+			// console.log('skipping ', one)
+		}
+		else {
+			simple = merged[0]
+			// console.log('merged ', simple)
+		}
+	}
+
+	final.push(simple)
+	// console.log('finalizing: ', final)
+	return final
 }
 
 function mymerge()
