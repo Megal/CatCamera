@@ -1,15 +1,18 @@
 '@import visibility-polygon-js/visibility_polygon_dev.js';
 
 let VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
+let campos = require('./geo_campos')
 let inner = require('./geo')
 let outer = require('./geo2')
-let camPoly=[];
+var fs = require('fs');
 
 const express = require('express')
 const greiner = require('greiner-hormann')
 const path = require('path')
 const app = express()
 const port = 3000
+
+let camPoly=[];
 
 let center = [
 	38.9178872108,
@@ -35,29 +38,52 @@ let allCorners = innerData.reduce(
 		}, 
 		[]
 	)
+
+// allCorners = [
+// 	[
+// 		38.919206857681274,
+// 		47.21869367405565
+// 	]
+// ]
+
+allCorners = campos.data.features.map(function(feature) { return feature.geometry.coordinates });
+// console.log('allCorners', allCorners)
+
+let precalculatedVisibilities = allCorners.map(function(vertex) {
+	let visibility = makeVisibility(vertex);
+
+	console.log('visibility count ', visibility.length);
+	return visibility;
+});
+// console.log('precalculatedVisibilities ', precalculatedVisibilities);
+
+let vertexIndicies = Array.apply(null, {length: allCorners.length}).map(Number.call, Number)
+
 //console.log('allCorners\n', allCorners, '\n/allCorners')
 
 function bestPlacement(cameraCount) {
 
-	let attempts = 10
-	let bestResult = []
+	let attempts = 1
+	let bestResultIndicies = []
 	let bestArea = -1
+	let bestTotalVisibility = []
 
 	for (let attempt = 0; attempt < attempts; ++attempt) {
-		let placement = shuffle(allCorners).slice(0, cameraCount);
+		let placementIndicies = shuffle(vertexIndicies).slice(0, cameraCount);
 		// console.log('placement', placement);
 
 		let totalVisibility = []
-		placement.forEach(function(vertex) {
-			// console.log('vertex', vertex);
-			let visibilityPolygon = makeVisibility(vertex);
-			// console.log('visibilityPolygon = ', visibilityPolygon);
+		placementIndicies.forEach(function(index) {
+			let vertex = allCorners[index];
+
+			let visibilityPolygon =  precalculatedVisibilities[index];
+			console.log('visibilityPolygon', visibilityPolygon);
 
 			if (totalVisibility.length > 0) {
 				totalVisibility = mergePoly(totalVisibility, visibilityPolygon);
 			}
 			else {
-				totalVisibility = visibilityPolygon;
+				totalVisibility = [visibilityPolygon];
 			}
 			// console.log('totalVisibility = ', totalVisibility);
 		});
@@ -66,19 +92,39 @@ function bestPlacement(cameraCount) {
 		// console.log('area = ', area);
 		if (bestArea < area) {
 			bestArea = area;
-			bestResult = placement;
+			bestResultIndicies = placementIndicies;
+			bestTotalVisibility = totalVisibility
 			console.log('new best area = ', bestArea);
+		}
 	}
 
-	}
+	let placement = bestResultIndicies.map(i => allCorners[i])
 
-	return bestResult
+	// logging best geojson
+
+	let visibilityPolygon =  bestResultIndicies.map(i => precalculatedVisibilities[i]);
+	logTotalVisibilityPolygon(visibilityPolygon);
+
+	console.log('new best area = ', bestArea);
+	return placement
 }
+
+function logTotalVisibilityPolygon(totalVisibilityPolygon) {
+	console.log('logTotalVisibilityPolygon.length = ', totalVisibilityPolygon.length)
+	console.log('logTotalVisibilityPolygon = ', totalVisibilityPolygon)
+	let geojson = geojsonfy(totalVisibilityPolygon)
+	console.log('geojson = ', geojson)
+	fs.writeFile('geojson.geojson', JSON.stringify(geojson), 'utf8', function(err) {
+		if (err) throw err;
+		console.log('complete writing');
+	});
+}
+
 
 function calcTotalArea(polygons) {
 	let vectorizedArea = 0
 
-	if(typeof polygons[0][0] === 'number'){ // single linear ring
+	if(typeof polygons[0][0] === 'number') { // single linear ring
         polygons = [polygons];
 	}
 	
@@ -101,7 +147,7 @@ function makeVisibility(vertex) {
 	let y = vertex[1]
 
 	// make Umbrella
-	let umbrella = calcPolyCam(x, y, rPolyCam, edgeNumCam);	
+	let umbrella = precisePolCam8(x, y, rPolyCam);
 
 	// place Umbrella
 	let geodataRestricted = geodata.slice();
@@ -120,8 +166,16 @@ function makeVisibility(vertex) {
 }
 
 function geojsonfy(polygon) {
-	let duplicatedFirst = polygon
-	duplicatedFirst.push(polygon[0])
+	console.log('polygon ', polygon)
+	let duplicatedFirst = polygon.map(function(building) {
+		var duplicatedFirst = building.slice()
+		duplicatedFirst.push(building[0])
+		console.log('building[0] ', building[0])
+		console.log('duplicatedFirst', duplicatedFirst)
+
+		return duplicatedFirst
+	});
+	console.log('duplicatedFirst ', duplicatedFirst)
 
 	return {
 		"type": "FeatureCollection",
@@ -131,20 +185,33 @@ function geojsonfy(polygon) {
 				"properties": {},
 				"geometry": {
 					"type": "Polygon",
-					"coordinates": [ duplicatedFirst ]
+					"coordinates": duplicatedFirst
 				}
 			}
 		]
 	}
 }
 
-function calcPolyCam(x, y, radius, numberOfSegments) {
+function precisePolCam8(x, y, R)
+{
+    let coordinates = [];
+    coordinates[0] = [0, 1];
+    coordinates[1] = [Math.SQRT1_2, Math.SQRT1_2];
+    coordinates[2] = [1, 0];
+    coordinates[3] = [Math.SQRT1_2, -Math.SQRT1_2];
+    coordinates[4] = [0, -1];
+    coordinates[5] = [-Math.SQRT1_2, -Math.SQRT1_2];
+    coordinates[6] = [-1, 0];
+    coordinates[7] = [-Math.SQRT1_2, Math.SQRT1_2];
+    coordinates[8] = [0, 1];
 
-	// make super precision using magic constant of Math Math.SQRT1_2
-    let coordinates=[];
+    for (let i = 0; i < 9; i += 1)
+    {
+        coordinates[i][0] *= R;
+        coordinates[i][0] += x;
 
-    for (let i = 0; i <= numberOfSegments; i += 1) {
-        coordinates.push([x + radius * Math.cos(i * 2 * Math.PI / numberOfSegments), y + radius * Math.sin(i * 2 * Math.PI / numberOfSegments)]);
+        coordinates[i][1] *= R;
+        coordinates[i][1] += y;
     }
     return coordinates;
 }
@@ -165,6 +232,9 @@ function calcPolygonArea(vertices) {
 
 	return Math.abs(total);
 }
+
+
+
 
 /**
  * Shuffles array in place.
@@ -187,28 +257,28 @@ function mergePoly(source, simple) {
 	}
 
 	let final = []
-	for (let i = 0, len = source.count; i < len; ++i) {
+	for (let i = 0, len = source.length; i < len; ++i) {
 		let one = source[i]
 		let merged = greiner.union(one,simple)
 		if (merged.length == 2) {
 			final.push(one)
-			// console.log('skipping ', one)
+			console.log('skipping ', one)
 		}
 		else {
 			simple = merged[0]
-			// console.log('merged ', simple)
+			console.log('merged ', simple)
 		}
 	}
 
 	final.push(simple)
-	// console.log('finalizing: ', final)
+	console.log('finalizing: ', final)
 	return final
 }
 
 function mymerge()
 {
 	console.log("merge = ",mergePoly(calcPolyCam(2, 2, 2, 4),calcPolyCam(1, 1, 2, 4)))
-	return mergePoly(calcPolyCam(1, 1, 1, 4),calcPolyCam(2, 2, 2, 4))
+	return mergePoly(calcPolyCam(1, 1, 1, 4),calcPolyCam(2, 2, 2, x4))
 }
 
 
