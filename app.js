@@ -1,7 +1,7 @@
 '@import visibility-polygon-js/visibility_polygon_dev.js';
-const VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
-const inner = require('./geo')
-const outer = require('./geo2')
+let VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
+let inner = require('./geo')
+let outer = require('./geo2')
 let camPoly=[];
 
 const express = require('express')
@@ -14,8 +14,8 @@ let center = [
 	47.2184894537
 ]
 
-const rPolyCam = 0.000466366;
-const edgeNumCam = 8;
+let rPolyCam = 0.000466366;
+let edgeNumCam = 8;
 
 
 
@@ -34,22 +34,63 @@ let allCorners = innerData.reduce(
 		}, 
 		[]
 	)
-console.log('allCorners\n', allCorners, '\n/allCorners')
+//console.log('allCorners\n', allCorners, '\n/allCorners')
 
-camPoly = calcPolyCam(center[0],center[1],rPolyCam,edgeNumCam);
+function bestPlacement(cameraCount) {
 
-geodataRestricted=geodata;
-geodataRestricted.push(camPoly);
-console.log('geodataRestricted = ', geodataRestricted);
+	let attempts = 5
+	let bestResult = []
+	let bestArea = -1
+	for (let attempt = 0; attempt < attempts; ++attempt) {
+		let placement = shuffle(allCorners).slice(0, cameraCount)
+		console.log('placement', placement)
 
-var segments = VisibilityPolygon.convertToSegments(geodata);
-segments = VisibilityPolygon.breakIntersections(segments);
-var position = center;
-var visibility = VisibilityPolygon.compute(position, segments);
-var viewportVisibility = VisibilityPolygon.computeViewport(position, segments, [38.90911102294922, 38.926663398742676], [47.21408806123239, 47.22289084617913]);
+		let totalVisibility = []
+		placement.forEach(function(vertex) {
+			console.log('vertex', vertex)
+			let visibilityPolygon = makeVisibility(vertex)
+
+			let xyArray = visibilityPolygon.map(a => ({x: a[0], y: a[1]}));
+			let area = calcPolygonArea(xyArray)
+
+			console.log('area = ', area)
+			if (bestArea < area) {
+				bestArea = area
+				bestResult = placement
+			}
+		});
+	}
+
+	return bestResult
+}
+
+function makeVisibility(vertex) {
+	let x = vertex[0]
+	let y = vertex[1]
+
+	// make Umbrella
+	let umbrella = calcPolyCam(x, y, rPolyCam, edgeNumCam);	
+
+	// place Umbrella
+	let geodataRestricted = geodata.slice();
+	geodataRestricted.push(umbrella);
+
+	// convert to segments
+	console.log('geodataRestricted.length', geodataRestricted.length)
+	let segments = VisibilityPolygon.convertToSegments(geodataRestricted);
+	segments = VisibilityPolygon.breakIntersections(segments);
+	console.log('segments', segments)
+
+	// draw polygon and filter
+	let visibility = VisibilityPolygon.compute(vertex, segments);
+	let viewportVisibility = VisibilityPolygon.computeViewport(vertex, segments, [38.90911102294922, 38.926663398742676], [47.21408806123239, 47.22289084617913]);
+	let filtered = viewportVisibility.filter(e => e.length == 2)
+
+	return filtered
+}
 
 function geojsonfy(polygon) {
-	var duplicatedFirst = polygon
+	let duplicatedFirst = polygon
 	duplicatedFirst.push(polygon[0])
 
 	return {
@@ -67,15 +108,11 @@ function geojsonfy(polygon) {
 	}
 }
 
-console.log('<geojsonfy>', geojsonfy(viewportVisibility))
-console.log('</geojsonfy>')
-
-
 function calcPolyCam(x, y, radius, numberOfSegments) {
 
-    var coordinates=[];
+    let coordinates=[];
 
-    for (var i = 0; i <= numberOfSegments; i += 1) {
+    for (let i = 0; i <= numberOfSegments; i += 1) {
         coordinates.push([x + radius * Math.cos(i * 2 * Math.PI / numberOfSegments), y + radius * Math.sin(i * 2 * Math.PI / numberOfSegments)]);
     }
     return coordinates;
@@ -83,44 +120,50 @@ function calcPolyCam(x, y, radius, numberOfSegments) {
 
 
 function calcPolygonArea(vertices) {
-  var total = 0;
+	let total = 0;
 
-  for (var i = 0, l = vertices.length; i < l; i++) {
-    var addX = vertices[i].x;
-    var addY = vertices[i == vertices.length - 1 ? 0 : i + 1].y;
-    var subX = vertices[i == vertices.length - 1 ? 0 : i + 1].x;
-    var subY = vertices[i].y;
+	for (let i = 0, l = vertices.length; i < l; i++) {
+		let addX = vertices[i].x;
+		let addY = vertices[i == vertices.length - 1 ? 0 : i + 1].y;
+		let subX = vertices[i == vertices.length - 1 ? 0 : i + 1].x;
+		let subY = vertices[i].y;
 
-    total += (addX * addY * 0.5);
-    total -= (subX * subY * 0.5);
-  }
+		total += (addX * addY * 0.5);
+		total -= (subX * subY * 0.5);
+	}
 
-  return Math.abs(total);
+	return Math.abs(total);
 }
 
-let allVertixes 
+/**
+ * Shuffles array in place.
+ * @param {Array} a items An array containing the items.
+ */
+function shuffle(a) {
+    let j, x, i;
+    for (i = a.length - 1; i > 0; i--) {
+        j = Math.floor(Math.random() * (i + 1));
+        x = a[i];
+        a[i] = a[j];
+        a[j] = x;
+    }
+    return a;
+}
 
-const xyArray = viewportVisibility.map(a => ({x: a[0], y: a[1]}));
-console.log('calcPolygonArea = ', calcPolygonArea(xyArray));
-
-var init = function() {
-	var canvas = document.getElementById("canvas");
+let init = function() {
+	let canvas = document.getElementById("canvas");
 	context = canvas.getContext("2d");
 	
 	console.log(polygons);
-	var outer = createPoly(polygons[0]);
-	var first = createPoly(polygons[1]);
-	var second = createPoly(polygons[2]);
+	let outer = createPoly(polygons[0]);
+	let first = createPoly(polygons[1]);
+	let second = createPoly(polygons[2]);
 	console.log(first);
 	console.log(second);
 
-	// var arrayOfVec2 = polygons.map(a => (Vec2(a[0], a[1])))
-	// console.log("arrayOfVec2")
-	// console.log(arrayOfVec2);
-
 	let triangles = one.union(two);
 
-	var paths = triangles.map(triangle => {
+	let paths = triangles.map(triangle => {
 		return triangle.reduce((p, pt) => {
 		return p.concat(pt.map(p => p));
 		}, []);
@@ -128,7 +171,7 @@ var init = function() {
   
 	clearScreen();
 
-	var combined =  createPoly(paths);
+	let combined =  createPoly(paths);
 
 	console.log(combined);
 	//bring to screen
@@ -159,6 +202,10 @@ app.get('/',function(req,res) {
 
 app.get('/result',function(req,res) {
 	res.send(geojsonfy(viewportVisibility));
+});
+
+app.get('/best', function(req,res) {
+	res.send(bestPlacement(10));
 });
 
 app.listen(port, () => console.log(`App listening on port ${port}!`))
