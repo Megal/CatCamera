@@ -5,6 +5,8 @@ let campos = require('./geo_campos')
 let inner = require('./geo')
 let outer = require('./geo2')
 var fs = require('fs');
+var turf = require('turf');
+
 
 const express = require('express')
 const greiner = require('greiner-hormann')
@@ -63,7 +65,7 @@ let vertexIndicies = Array.apply(null, {length: allCorners.length}).map(Number.c
 
 function bestPlacement(cameraCount) {
 
-	let attempts = 1
+	let attempts = 10
 	let bestResultIndicies = []
 	let bestArea = -1
 	let bestTotalVisibility = []
@@ -251,6 +253,17 @@ function shuffle(a) {
     return a;
 }
 
+function geofy(poly) {
+	
+}
+
+function enclose(shape) {
+	let newShape = shape.slice()
+	newShape.push(shape[0])
+
+	return newShape
+}
+
 function mergePoly(source, simple) {
 	if (source.length == 0) {
 		return [simple]
@@ -259,14 +272,28 @@ function mergePoly(source, simple) {
 	let final = []
 	for (let i = 0, len = source.length; i < len; ++i) {
 		let one = source[i]
-		let merged = greiner.union(one,simple)
-		if (merged.length == 2) {
+
+		let p_one = turf.polygon([enclose(one)])
+		// console.log('p_one', p_one)
+
+		let p_simple = turf.polygon([enclose(simple)])
+		// console.log('p_simple', p_simple)			
+
+		let merged = turf.union(p_one, p_simple)
+		// console.log('merged turf', merged)			
+
+		// console.log('merged.geometry.type', merged.geometry.type)
+		if (merged.geometry.type == 'MultiPolygon') {
 			final.push(one)
-			console.log('skipping ', one)
+			console.log('skipping ', one);	
 		}
 		else {
-			simple = merged[0]
-			console.log('merged ', simple)
+			let coords = merged.geometry.coordinates;
+			// console.log('coords', coords);
+
+			simple = coords[0];
+			simple.pop()
+			// console.log('merged ', simple)
 		}
 	}
 
@@ -274,6 +301,30 @@ function mergePoly(source, simple) {
 	console.log('finalizing: ', final)
 	return final
 }
+
+// function mergePoly(source, simple) {
+// 	if (source.length == 0) {
+// 		return [simple]
+// 	}
+
+// 	let final = []
+// 	for (let i = 0, len = source.length; i < len; ++i) {
+// 		let one = source[i]
+// 		let merged = greiner.union(one,simple)
+// 		if (merged.length == 2) {
+// 			final.push(one)
+// 			console.log('skipping ', one)
+// 		}
+// 		else {
+// 			simple = merged[0]
+// 			console.log('merged ', simple)
+// 		}
+// 	}
+
+// 	final.push(simple)
+// 	console.log('finalizing: ', final)
+// 	return final
+// }
 
 function mymerge()
 {

@@ -4,8 +4,11 @@
   "description": "",
   "main": "app.js",
   "dependencies": {
+    "@turf/buffer": "^5.1.5",
+    "@turf/collect": "^6.0.1",
     "express": "^4.17.1",
-    "greiner-hormann": "^1.4.1"
+    "greiner-hormann": "^1.4.1",
+    "turf": "^3.0.14"
   },
   "devDependencies": {},
   "scripts": {
