@@ -1,10 +1,12 @@
 '@import visibility-polygon-js/visibility_polygon_dev.js';
+
 let VisibilityPolygon = require('./visibility-polygon-js/visibility_polygon_dev');
 let inner = require('./geo')
 let outer = require('./geo2')
 let camPoly=[];
 
 const express = require('express')
+const greiner = require('greiner-hormann')
 const path = require('path')
 const app = express()
 const port = 3000
@@ -25,7 +27,7 @@ let geodata = innerData.concat(outerData)
 
 let allCorners = innerData.reduce(
 		(total, currentValue) => {
-			console.log('total = ', total)
+			//console.log('total = ', total)
 			currentValue.forEach(corner => { 
 				total.push(corner) 
 			})
@@ -38,7 +40,7 @@ let allCorners = innerData.reduce(
 
 function bestPlacement(cameraCount) {
 
-	let attempts = 5
+	let attempts = 25
 	let bestResult = []
 	let bestArea = -1
 	for (let attempt = 0; attempt < attempts; ++attempt) {
@@ -49,6 +51,7 @@ function bestPlacement(cameraCount) {
 		placement.forEach(function(vertex) {
 			console.log('vertex', vertex)
 			let visibilityPolygon = makeVisibility(vertex)
+
 
 			let xyArray = visibilityPolygon.map(a => ({x: a[0], y: a[1]}));
 			let area = calcPolygonArea(xyArray)
@@ -151,6 +154,18 @@ function shuffle(a) {
     return a;
 }
 
+function mergePoly(one, two) {
+	return greiner.union(one,two)
+}
+
+function mymerge()
+{
+	console.log("merge = ",mergePoly(calcPolyCam(2, 2, 2, 4),calcPolyCam(1, 1, 2, 4)))
+	return mergePoly(calcPolyCam(1, 1, 1, 4),calcPolyCam(2, 2, 2, 4))
+}
+
+
+
 let init = function() {
 	let canvas = document.getElementById("canvas");
 	context = canvas.getContext("2d");
@@ -180,21 +195,9 @@ let init = function() {
 	// drawPoly(first,"red",0,0);
 	// drawPoly(second,"cyan",0,0);
 	drawPoly(combined,"green",0,0);
-
-
-	
-	// let show1 = function() { difference(poly1, poly2); };
-	// let show2 = function() { difference(poly1, poly2); };
-	// let show3 = function() { difference(poly1, poly2); };
-	// let show4 = function() { difference(poly1, poly2); };
-
-	// //listen to buttons
-	// document.getElementById("difBtn").addEventListener("click",show1);
-	// document.getElementById("intBtn").addEventListener("click",show2);
-	// document.getElementById("unBtn").addEventListener("click",show3);
-	// document.getElementById("xorBtn").addEventListener("click",show4);
-	
 }
+
+//mymerge()
 
 // Express
 app.get('/',function(req,res) {
@@ -206,7 +209,19 @@ app.get('/result',function(req,res) {
 });
 
 app.get('/best', function(req,res) {
-	res.send(bestPlacement(10));
+	if (req.query.count != null) {
+		res.send(bestPlacement(req.query.count));
+
+	} else {
+		res.send(bestPlacement(10));
+
+	}
 });
+
+// app.get('/merge', function(req,res) {
+// 	res.send(geojsonfy(mymerge()));
+// });
+
+
 
 app.listen(port, () => console.log(`App listening on port ${port}!`))
