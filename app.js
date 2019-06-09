@@ -110,6 +110,7 @@ function geojsonfy(polygon) {
 
 function calcPolyCam(x, y, radius, numberOfSegments) {
 
+	// make super precision using magic constant of Math Math.SQRT1_2
     let coordinates=[];
 
     for (let i = 0; i <= numberOfSegments; i += 1) {
