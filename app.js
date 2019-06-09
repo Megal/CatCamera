@@ -244,7 +244,11 @@ let init = function() {
 	drawPoly(combined,"green",0,0);
 }
 
-//mymerge()
+app.use(function(req, res, next) {
+	res.header("Access-Control-Allow-Origin", "*");
+	res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+	next();
+});
 
 // Express
 app.get('/',function(req,res) {
@@ -264,11 +268,5 @@ app.get('/best', function(req,res) {
 
 	}
 });
-
-// app.get('/merge', function(req,res) {
-// 	res.send(geojsonfy(mymerge()));
-// });
-
-
 
 app.listen(port, () => console.log(`App listening on port ${port}!`))
